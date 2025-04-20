@@ -32,9 +32,15 @@ if 'process_complete' not in st.session_state:
 if 'resultados' not in st.session_state:
     st.session_state.resultados = None
 
-# Controle de botão para evitar duplo clique
-if 'botao_ativo' not in st.session_state:
-    st.session_state.botao_ativo = True  # Definir inicialmente o botão como "ativo"
+if 'usuario_telegram' not in st.session_state:
+    st.session_state.usuario_telegram = None
+
+if 'telegram_interacao_completa' not in st.session_state:
+    st.session_state.telegram_interacao_completa = False  # Flag para controle da interação com o bot
+
+# Inicializando o limiar de confiança com valor padrão
+if 'limiar_confianca' not in st.session_state:
+    st.session_state.limiar_confianca = 0.25  # Valor inicial do limiar de confiança
 
 # Função para avançar para a próxima etapa
 def avançar_etapa():
@@ -71,10 +77,7 @@ if st.session_state.current_step == 1:
     if video_file is not None:
         st.video(video_file)  # Exibir prévia do vídeo
         
-        if st.button("Continuar para métodos de alerta", disabled=not st.session_state.botao_ativo):
-            # Desabilitar o botão para evitar duplo clique
-            st.session_state.botao_ativo = False
-            
+        if st.button("Continuar para métodos de alerta"):
             with st.spinner("Preparando o vídeo..."):
                 try:
                     # Salvar o vídeo
@@ -90,9 +93,6 @@ if st.session_state.current_step == 1:
                 except Exception as e:
                     logger.error(f"Erro ao salvar o vídeo: {str(e)}")
                     st.error("Erro ao salvar o vídeo.")
-                finally:
-                    # Reabilitar o botão após a execução
-                    st.session_state.botao_ativo = True
 
 # Etapa 2: Seleção do método de alerta
 elif st.session_state.current_step == 2:
@@ -103,13 +103,35 @@ elif st.session_state.current_step == 2:
     if alerta_tipo == "Telegram":
         usuario_telegram = st.text_input("Nome de usuário no Telegram (sem @):")
         st.session_state.usuario_telegram = usuario_telegram
-    
+        
+        if usuario_telegram:
+            # Exibir a mensagem de orientação sobre o Telegram
+            st.markdown("""
+            <div style="background-color: #cce5ff; padding: 15px; border-radius: 5px; border: 2px solid #007bff;">
+                <strong style="color: #0056b3;">Atenção!</strong> Abra seu Telegram e encontre o seguinte usuário: 
+                <strong style="color: #007bff;">sharpobjectdetectionBot</strong>. 
+                Diga "Olá" para esse usuário para iniciar uma conversa com o Bot.
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Perguntar se já fez a interação com o bot
+            interacao_completa = st.radio("Você já deu um olá para o sharpobjectdetectionBot?", ("Não", "Sim"))
+            if interacao_completa == "Sim":
+                st.session_state.telegram_interacao_completa = True
+            else:
+                st.session_state.telegram_interacao_completa = False
+
+        # Avançar para a próxima etapa somente se a interação foi completada
+        if st.session_state.telegram_interacao_completa and st.button("Continuar ➡️"):
+            st.session_state.alerta_tipo = alerta_tipo        
+            avançar_etapa()  # Avançar para a etapa 3
+
     elif alerta_tipo == "E-mail":
         destinatario_email = st.text_input("Destinatário do e-mail:")
         st.session_state.destinatario_email = destinatario_email
     
     # Avançar para a próxima etapa
-    if st.button("Continuar ➡️", disabled=not st.session_state.botao_ativo):
+    if alerta_tipo != "Telegram" and st.button("Continuar ➡️"):
         st.session_state.alerta_tipo = alerta_tipo        
         avançar_etapa()  # Avançar para a etapa 3
 
@@ -119,12 +141,18 @@ elif st.session_state.current_step == 3:
     
     # Mostrar o status do processamento (se o vídeo foi analisado)
     if not st.session_state.process_complete:
-        st.markdown("Processando o vídeo...")
         
-        if st.button("Iniciar Processamento", disabled=not st.session_state.botao_ativo):
-            # Desabilitar o botão para evitar duplo clique
-            st.session_state.botao_ativo = False
-            
+        # Adicionar a opção de selecionar o limiar de confiança antes de iniciar o processamento
+        st.session_state.limiar_confianca = st.slider(
+            "Limiar de Confiança", 
+            min_value=0.1, 
+            max_value=1.0, 
+            value=st.session_state.limiar_confianca, 
+            step=0.05,
+            help="Quanto maior o valor, mais precisa será a detecção."
+        )
+        
+        if st.button("Iniciar Processamento"):
             with st.spinner("Processando o vídeo..."):
                 try:
                     # Ajuste para garantir que os parâmetros sejam passados corretamente
@@ -133,7 +161,8 @@ elif st.session_state.current_step == 3:
                         "alertar_email": st.session_state.alerta_tipo == "E-mail",
                         "usuario_telegram": st.session_state.usuario_telegram if st.session_state.alerta_tipo == "Telegram" else "",
                         "gerar_video": st.session_state.alerta_tipo == "Apenas Gerar Vídeo",
-                        "destinatario_email": st.session_state.destinatario_email if st.session_state.alerta_tipo == "E-mail" else ""
+                        "destinatario_email": st.session_state.destinatario_email if st.session_state.alerta_tipo == "E-mail" else "",
+                        "limiar_confianca": st.session_state.limiar_confianca  # Passando o limiar de confiança para a API
                     }
 
                     logger.info(f"Parâmetros enviados para a API: {params}")
@@ -149,9 +178,6 @@ elif st.session_state.current_step == 3:
                 except Exception as e:
                     logger.error(f"Erro ao processar o vídeo: {str(e)}")
                     st.error("Erro ao processar o vídeo.")
-                finally:
-                    # Reabilitar o botão após a execução
-                    st.session_state.botao_ativo = True
     
     # Se o processamento foi concluído, mostrar os resultados
     if st.session_state.process_complete:
@@ -160,5 +186,20 @@ elif st.session_state.current_step == 3:
             st.markdown("**Objetos cortantes detectados! Alertas enviados com sucesso**")
         else:
             st.markdown("**Nenhum objeto cortante detectado.**")
+        
+        # Exibir o caminho do vídeo processado (se estiver disponível)
+        if 'video_processado' in resultados:
+            st.markdown(f"**Vídeo processado gerado!**")
+            video_path = resultados['video_processado']
+            
+            # Botão de download para o vídeo processado
+            with open(video_path, "rb") as video_file:
+                st.download_button(
+                    label="📥 Baixar Vídeo Processado",
+                    data=video_file,
+                    file_name=os.path.basename(video_path),
+                    mime="video/mp4"
+                )
+    
         # Reiniciar a aplicação para nova análise
         st.session_state.current_step = 1
