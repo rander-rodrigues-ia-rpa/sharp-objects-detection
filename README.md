@@ -1,4 +1,4 @@
-# Cutting Object Detector - FIAP Tech Challenge
+# Cutting Object Detector
 
 Projeto de detecção de objetos cortantes em vídeos usando YOLOv8 com treinamento personalizado e API REST para envio de vídeos e alertas.
 
@@ -17,7 +17,7 @@ Projeto de detecção de objetos cortantes em vídeos usando YOLOv8 com treiname
 ## 📦 Estrutura do Projeto
 
 ```
-cutting_object_detector/
+Sharp_objects_detection/
 ├── app/                  # Lógica do modelo e serviços
 │   ├── detector.py
 │   ├── trainer.py
