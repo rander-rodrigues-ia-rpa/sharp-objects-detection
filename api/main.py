@@ -11,6 +11,7 @@ from app.alerta_telegram import enviar_alerta_telegram, gerar_mensagem_padrao
 from datetime import datetime
 import base64
 import time
+from app.trainer import criar_config_yaml, treinar_modelo
 
 # Configurar logging
 logging.basicConfig(
@@ -305,3 +306,21 @@ async def analisar_video(
             status_code=500, 
             content={"erro": str(e), "detalhes": stack_trace}
         )
+    
+@app.post("/treinar-modelo")
+def treinar_modelo_api(
+     dataset_path: str = Form(...),
+     epochs: int = Form(default=80)
+ ):
+     try:
+         config_path = criar_config_yaml(dataset_path)
+         resultados = treinar_modelo(config_path, epochs=epochs)
+ 
+         modelo_treinado_path = os.path.join("runs", "detect", "objeto_cortante_detector", "weights", "best.pt")
+         if os.path.exists(modelo_treinado_path):
+             os.makedirs("models", exist_ok=True)
+             shutil.copy(modelo_treinado_path, MODELO_PATH)
+ 
+         return {"mensagem": "Treinamento concluído com sucesso.", "modelo_salvo_em": MODELO_PATH}
+     except Exception as e:
+         return JSONResponse(status_code=500, content={"erro": str(e)})
