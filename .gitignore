@@ -1,5 +1,6 @@
 Cortantes.v1i.yolov12/
-env/
+enviroment/
+videos/
 videos/
 usuarios_telegram.json
 telegram_alerts.log

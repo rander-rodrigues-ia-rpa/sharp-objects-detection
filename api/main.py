@@ -9,6 +9,7 @@ import logging
 from app.detector import processar_video
 from app.alerta_telegram import enviar_alerta_telegram, gerar_mensagem_padrao
 from datetime import datetime
+import base64
 
 # Configurar logging
 logging.basicConfig(
@@ -18,19 +19,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+MODELO_PATH = os.environ.get('MODELO_PATH')
+TOKEN_TELEGRAM = os.environ.get('TOKEN_TELEGRAM')
+URL_LAMBDA = os.environ.get('URL_LAMBDA')
+
 app = FastAPI()
 
-MODELO_PATH = 'models/objeto_cortante.pt'
-TOKEN_TELEGRAM = "7264851956:AAFmNIOo7gMNmthV9pXxrFtbOQ8CqhoC-K4"
 
 # Função para enviar mensagem ao usuário e capturar o chat_id automaticamente
-def registrar_telegram_usuario(usuario_telegram, token):
+def registrar_telegram_usuario(usuario_telegram):
     """
     Registra um usuário do Telegram e obtém seu chat_id.
     """
     try:
         # Enviar mensagem para o usuário, isso vai fazer o Telegram registrar o chat_id
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
         parametros = {
             'chat_id': usuario_telegram,  # Nome de usuário no Telegram
             'text': "Olá! Seu chat ID foi registrado com sucesso. Agora você pode enviar vídeos para análise!"
@@ -57,14 +60,15 @@ def registrar_telegram_usuario(usuario_telegram, token):
 
 
 # Função para obter o chat_id automaticamente
-def obter_chat_id(username, token):
+def obter_chat_id(username):
     """
     Obtém o chat_id de um usuário específico através do nome de usuário do Telegram.
     Utiliza o método getUpdates para procurar pelo username e obter o chat_id associado.
     """
     try:
+
         # Usar o getUpdates para capturar as mensagens enviadas para o bot
-        url = f"https://api.telegram.org/bot{token}/getUpdates"
+        url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/getUpdates"
         response = requests.get(url, timeout=30)
         
         # Verificar se a resposta foi bem-sucedida
@@ -91,14 +95,14 @@ def obter_chat_id(username, token):
 
 # Endpoint para registrar o usuário do Telegram
 @app.post("/registrar-telegram")
-def registrar_telegram(usuario_telegram: str = Form(...), token_telegram: str = Form(...)):
+def registrar_telegram(usuario_telegram: str = Form(...)):
     try:
         # Obter o chat_id automaticamente ao interagir com o bot
-        chat_id = obter_chat_id(usuario_telegram, token_telegram)
+        chat_id = obter_chat_id(usuario_telegram)
         
         if chat_id is None:
             # Tentar registrar diretamente
-            chat_id = registrar_telegram_usuario(usuario_telegram, token_telegram)
+            chat_id = registrar_telegram_usuario(usuario_telegram)
         
         if chat_id is None:
             return JSONResponse(status_code=400, content={"mensagem": "Não foi possível obter o chat_id. Verifique se o bot recebeu a mensagem."})
@@ -126,9 +130,11 @@ def registrar_telegram(usuario_telegram: str = Form(...), token_telegram: str = 
 async def analisar_video(
     video: UploadFile,
     alertar_telegram: bool = Form(...),  # Adicionado parâmetro para enviar alerta via Telegram
+    alertar_email: bool = Form(False),  # Parâmetro para enviar por e-mail
     usuario_telegram: str = Form(...),   # Nome de usuário do Telegram
     gerar_video: bool = Form(...),      # Se deve gerar vídeo processado
-    limiar_confianca: float = Form(0.25) # Limiar de confiança para a detecção
+    limiar_confianca: float = Form(0.25), # Limiar de confiança para a detecção
+    destinatario_email: str = Form(default="")  # Remetente do e-mail
 ):
     try:
         # Buscar o chat_id do usuário no arquivo JSON
@@ -179,6 +185,33 @@ async def analisar_video(
         # Enviar alertas via Telegram para cada detecção
         alertas_enviados = 0
         falhas_envio = 0
+
+        # Enviar e-mail com os frames detectados, se solicitado
+        if alertar_email and objeto_detectado:
+            for deteccao in deteccoes:
+                frame_path = deteccao.get("frame_path")
+                
+                # Converter o frame para base64
+                with open(frame_path, "rb") as img_file:
+                    imagem_base64 = base64.b64encode(img_file.read()).decode('utf-8')
+                    imagem_base64 = f"data:image/png;base64,{imagem_base64}" 
+
+                # Montar o payload para o envio via API Lambda
+                payload = {
+                    "email": destinatario_email,
+                    "mensagem": "Olá, segue em anexo uma imagem registrada por nossos sistemas de vigilância.",
+                    "imagemBase64": imagem_base64
+                }
+
+                # Enviar o e-mail via Lambda API
+                response = requests.post(URL_LAMBDA, json=payload)
+
+                # Verificar o sucesso do envio
+                if response.status_code == 200:
+                    resposta["alerta_email"] = f"E-mail enviado com sucesso com os frames detectados."
+                else:
+                    resposta["alerta_email"] = f"Falha ao enviar e-mail. Status: {response.status_code}"
+
         
         if alertar_telegram and objeto_detectado:
             # Para limitar a quantidade de alertas em vídeos com muitas detecções
