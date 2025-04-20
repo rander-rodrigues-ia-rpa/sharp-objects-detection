@@ -10,6 +10,7 @@ from app.detector import processar_video
 from app.alerta_telegram import enviar_alerta_telegram, gerar_mensagem_padrao
 from datetime import datetime
 import base64
+import time
 
 # Configurar logging
 logging.basicConfig(
@@ -136,21 +137,24 @@ async def analisar_video(
     limiar_confianca: float = Form(0.25), # Limiar de confiança para a detecção
     destinatario_email: str = Form(default="")  # Remetente do e-mail
 ):
-    try:
-        # Buscar o chat_id do usuário no arquivo JSON
-        try:
-            with open("usuarios_telegram.json", "r") as file:
-                usuarios = json.load(file)
-            chat_id_telegram = usuarios.get(usuario_telegram)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return JSONResponse(status_code=400, content={"mensagem": "Usuário não registrado. Registre-se primeiro no bot."})
 
-        if not chat_id_telegram:
-            return JSONResponse(status_code=400, content={"mensagem": "Usuário não registrado. Registre-se primeiro no bot."})
+    try:
+
+        if alertar_telegram:
+            # Buscar o chat_id do usuário no arquivo JSON
+            try:
+                with open("usuarios_telegram.json", "r") as file:
+                    usuarios = json.load(file)
+                chat_id_telegram = usuarios.get(usuario_telegram)
+            except (FileNotFoundError, json.JSONDecodeError):
+                return JSONResponse(status_code=400, content={"mensagem": "Usuário não registrado. Registre-se primeiro no bot."})
+
+            if not chat_id_telegram:
+                return JSONResponse(status_code=400, content={"mensagem": "Usuário não registrado. Registre-se primeiro no bot."})
 
         # Criar diretórios necessários
         os.makedirs("videos/input", exist_ok=True)
-        os.makedirs("videos/output", exist_ok=True)
+        os.makedirs("c:/temp/videos/output", exist_ok=True)
         
         # Criar diretório para salvar os frames com detecções
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -162,7 +166,7 @@ async def analisar_video(
         with open(input_path, "wb") as buffer:
             shutil.copyfileobj(video.file, buffer)
 
-        output_path = f"videos/output/processado_{timestamp}_{video.filename}" if gerar_video else None
+        output_path = f"c:/temp/videos/output/processado_{timestamp}_{video.filename}" if gerar_video else None
 
         # Processar o vídeo e detectar objetos cortantes
         video_processado, deteccoes = processar_video(
@@ -206,6 +210,9 @@ async def analisar_video(
                 # Enviar o e-mail via Lambda API
                 response = requests.post(URL_LAMBDA, json=payload)
 
+                # Adicionar um tempo de espera de 3 segundos antes de continuar
+                time.sleep(3)
+
                 # Verificar o sucesso do envio
                 if response.status_code == 200:
                     resposta["alerta_email"] = f"E-mail enviado com sucesso com os frames detectados."
@@ -216,7 +223,6 @@ async def analisar_video(
         if alertar_telegram and objeto_detectado:
             # Para limitar a quantidade de alertas em vídeos com muitas detecções
             max_alertas = 10  # Limite de alertas para não sobrecarregar o usuário
-            alertas_a_enviar = min(len(deteccoes), max_alertas)
             
             # Se houver muitas detecções, escolher frames mais espaçados
             if len(deteccoes) > max_alertas:
