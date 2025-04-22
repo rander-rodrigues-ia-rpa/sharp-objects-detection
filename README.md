@@ -155,7 +155,7 @@ curl --location 'http://127.0.0.1:8000/registrar-telegram' \
 --data-urlencode 'usuario_telegram=rrr'
 ```
 Importante: Este endpoint deve ser consumido somente após a interação com o bot no telegram. 
-Abra seu Telegram e encontre o seguinte usuário: sharpobjectdetectionBot. Diga "Olá" para o sharpobjectdetectionBot iniciar uma conversa com você.
+Abra seu Telegram e encontre o seguinte usuário: sharpobjectdetectionBot. Diga "Olá" para o sharpobjectdetectionBot iniciar uma conversa com você. para conferir se o usuário foi registrado no chat, basta acionar a api do Telegram informando o Token da conversa com o Bot: https://api.telegram.org/SEU-TOKEN-BOT/getUpdates
 
 
 ## 🔧 Requisitos
@@ -164,6 +164,7 @@ Abra seu Telegram e encontre o seguinte usuário: sharpobjectdetectionBot. Diga 
 - Dataset estruturado com `train/images`, `train/labels`, `valid/images`, `valid/labels`
 
 ### Manual do Usuário
+```bash
 1 - Passo 1: Faça o upload do vídeo que deseja ser analisado.
 2 - Passo 2: Escolha o método de alerta.
   As opções de alerta disponíveis são:
@@ -171,3 +172,4 @@ Abra seu Telegram e encontre o seguinte usuário: sharpobjectdetectionBot. Diga 
      2.2 - E-mail: Informe o e-mail do destinatário para receber os alertas via e-mail.
      2.3 - Apenas gerar vídeo: Essa opção permite fazer o download do vídeo analisado.
 3 - Escolha o limiar de confiança para a detecção de imagens.
+```

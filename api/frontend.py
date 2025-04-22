@@ -17,7 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger()
 
 # Configuração da URL da API
-API_URL = "http://localhost:8000"  # Ajuste para a URL correta da sua API FastAPI
+API_URL = "http://localhost:8888"  # Ajuste para a URL correta da sua API FastAPI
 
 # Inicialização de estados da sessão
 if 'current_step' not in st.session_state:
@@ -47,6 +47,12 @@ if 'destinatario_email' not in st.session_state:
 # Inicializando o limiar de confiança com valor padrão
 if 'limiar_confianca' not in st.session_state:
     st.session_state.limiar_confianca = 0.25  # Valor inicial do limiar de confiança
+
+def atualizar_usuario_telegram():
+    st.session_state.usuario_telegram = st.session_state.input_usuario_telegram
+
+def atualizar_destinatario_email():
+    st.session_state.destinatario_email = st.session_state.input_destinatario_email
 
 # Função para definir diretamente o próximo passo
 def set_step(step):
@@ -103,15 +109,25 @@ def iniciar_processamento():
             "alertar_telegram": st.session_state.alerta_tipo == "Telegram",
             "alertar_email": st.session_state.alerta_tipo == "E-mail",
             "usuario_telegram": st.session_state.usuario_telegram if st.session_state.alerta_tipo == "Telegram" else "",
-            "gerar_video": st.session_state.alerta_tipo == "Apenas Gerar Vídeo",
+            "gerar_video": True,
             "destinatario_email": st.session_state.destinatario_email if st.session_state.alerta_tipo == "E-mail" else "",
             "limiar_confianca": st.session_state.limiar_confianca  # Passando o limiar de confiança para a API
         }
 
         logger.info(f"Parâmetros enviados para a API: {params}")
 
+        if st.session_state.alerta_tipo == "Telegram":
+            response = requests.post(
+                f"{API_URL}/registrar-telegram",
+                data={"usuario_telegram": st.session_state.usuario_telegram}
+            )
+            logger.info(f"Registro Telegram: {response.json()}")
+
         # Chama a função para analisar o vídeo na API
         resultados = analisar_video_api(st.session_state.video_path, params)
+
+        logger.info(f"Resultados: {resultados}")
+
         st.session_state.resultados = resultados
         st.session_state.process_complete = True
         
@@ -171,7 +187,7 @@ elif st.session_state.current_step == 2:
              on_change=atualizar_alerta_tipo)
     
     if st.session_state.alerta_tipo == "Telegram":
-        st.text_input("Nome de usuário no Telegram (sem @):", key="usuario_telegram")
+        st.text_input("Nome de usuário no Telegram (sem @):", key="input_usuario_telegram", on_change=atualizar_usuario_telegram)
         
         if st.session_state.usuario_telegram:
             # Exibir a mensagem de orientação sobre o Telegram
@@ -193,6 +209,10 @@ elif st.session_state.current_step == 2:
             if st.session_state.telegram_interacao_completa:
                 if st.button("Continuar ➡️", key="btn_continuar_telegram", on_click=avancar_para_processamento):
                     pass  # A lógica está no callback on_click
+    elif st.session_state.alerta_tipo == "E-mail":
+        st.text_input("E-mail:", key="input_destinatario_email", on_change=atualizar_destinatario_email)
+        if st.button("Continuar ➡️", key="btn_continuar_outros", on_click=avancar_para_processamento):
+            pass  # A lógica está no callback on_click
     else:
         # Para outros tipos de alerta, mostrar o botão Continuar diretamente
         if st.button("Continuar ➡️", key="btn_continuar_outros", on_click=avancar_para_processamento):

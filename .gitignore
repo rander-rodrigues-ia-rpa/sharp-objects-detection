@@ -5,3 +5,5 @@ videos/
 usuarios_telegram.json
 telegram_alerts.log
 app.log
+__pycache__
+*.log
